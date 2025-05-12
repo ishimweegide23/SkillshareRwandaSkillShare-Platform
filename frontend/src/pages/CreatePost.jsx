@@ -1,8 +1,40 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { postAPI } from '../services/api';
+import {
+  Avatar,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  CardMedia,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  Grid,
+  IconButton,
+  Paper,
+  TextField,
+  Typography,
+  Tooltip
+} from '@mui/material';
+import {
+  AddPhotoAlternate,
+  Close,
+  Delete,
+  Edit,
+  Send,
+  Image,
+  Warning
+} from '@mui/icons-material';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
+
+const MAX_CHARS = 500;
 
 const CreatePost = () => {
   const [description, setDescription] = useState('');
@@ -10,22 +42,49 @@ const CreatePost = () => {
   const [previews, setPreviews] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [posts, setPosts] = useState([]);
+  const [editingPost, setEditingPost] = useState(null);
+  const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
+  const [postToDelete, setPostToDelete] = useState(null);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
-  const MAX_CHARS = 500;
+
+  useEffect(() => {
+    fetchPosts();
+  }, []);
+
+  const fetchPosts = async () => {
+    try {
+      setLoading(true);
+      const res = await postAPI.getFeed();
+      setPosts(res.data.data || []);
+    } catch (err) {
+      setError('Failed to load posts');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleFileChange = (e) => {
     const selectedFiles = Array.from(e.target.files);
-    setFiles(selectedFiles);
+    if (selectedFiles.length + files.length > 5) {
+      setError('Maximum 5 images allowed');
+      return;
+    }
+    
+    setFiles(prev => [...prev, ...selectedFiles]);
     
     // Create preview URLs
     const previewUrls = selectedFiles.map(file => URL.createObjectURL(file));
-    setPreviews(previewUrls);
+    setPreviews(prev => [...prev, ...previewUrls]);
   };
 
   const removeImage = (index) => {
     const newFiles = [...files];
     const newPreviews = [...previews];
+    
+    // Revoke the object URL to avoid memory leaks
+    URL.revokeObjectURL(newPreviews[index]);
     
     newFiles.splice(index, 1);
     newPreviews.splice(index, 1);
@@ -40,267 +99,299 @@ const CreatePost = () => {
     setError(null);
     
     try {
-      await postAPI.createPostWithImages(description, files);
-      navigate('/feed');
+      if (editingPost) {
+        // Update existing post
+        await postAPI.updatePost(editingPost.id, { description, files });
+      } else {
+        // Create new post
+        await postAPI.createPostWithImages(description, files);
+      }
+      
+      // Clear form and fetch updated posts
+      setDescription('');
+      setFiles([]);
+      setPreviews([]);
+      setEditingPost(null);
+      await fetchPosts();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to create post');
+      setError(err.response?.data?.message || 'Failed to save post');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleDeletePost = async () => {
+    try {
+      setLoading(true);
+      await postAPI.deletePost(postToDelete);
+      await fetchPosts();
+      setOpenDeleteDialog(false);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to delete post');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditPost = (post) => {
+    setEditingPost(post);
+    setDescription(post.description);
+    // Note: You can't edit existing images in this implementation
+    // You would need to handle that differently in your API
+  };
+
   const charsRemaining = MAX_CHARS - description.length;
 
   return (
-    <div className="create-post-container">
-      <div className="create-post-card">
-        <h2 className="create-post-title">Create Post</h2>
-        
-        <form onSubmit={handleSubmit} className="create-post-form">
-          <div className="form-group">
-            <textarea
-              name="description"
-              placeholder="What's on your mind?"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              required
-              maxLength={MAX_CHARS}
-              className="post-textarea"
-            />
-            <div className={`char-counter ${charsRemaining < 50 ? 'warning' : ''}`}>
-              {charsRemaining} characters remaining
-            </div>
-          </div>
-
-          <div className="file-upload-section">
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleFileChange}
-              ref={fileInputRef}
-              style={{ display: 'none' }}
-            />
-            
-            <button 
-              type="button" 
-              className="upload-btn"
-              onClick={() => fileInputRef.current.click()}
-            >
-              {files.length > 0 ? 'Add more images' : 'Upload images'}
-            </button>
-            
-            {files.length > 0 && (
-              <span className="file-count">{files.length} file(s) selected</span>
-            )}
-          </div>
-
-          {previews.length > 0 && (
-            <div className="image-previews">
-              {previews.map((preview, index) => (
-                <div key={index} className="image-preview-container">
-                  <img 
-                    src={preview} 
-                    alt={`Preview ${index}`} 
-                    className="image-preview"
-                  />
-                  <button
-                    type="button"
-                    className="remove-image-btn"
-                    onClick={() => removeImage(index)}
+    <Box sx={{ 
+      minHeight: '100vh',
+      backgroundColor: '#f5f7fa',
+      p: { xs: 2, md: 4 }
+    }}>
+      <Grid container justifyContent="center" spacing={3}>
+        <Grid item xs={12} md={8} lg={6}>
+          <Card sx={{ mb: 3, borderRadius: 3, boxShadow: 3 }}>
+            <CardContent>
+              <Typography variant="h5" component="h2" gutterBottom sx={{ fontWeight: 'bold' }}>
+                {editingPost ? 'Edit Post' : 'Create Post'}
+              </Typography>
+              
+              <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={4}
+                  variant="outlined"
+                  label="What's on your mind?"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  required
+                  inputProps={{ maxLength: MAX_CHARS }}
+                  sx={{ mb: 2 }}
+                />
+                
+                <Typography 
+                  variant="caption" 
+                  color={charsRemaining < 50 ? 'error' : 'text.secondary'}
+                  sx={{ display: 'block', textAlign: 'right' }}
+                >
+                  {charsRemaining} characters remaining
+                </Typography>
+                
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleFileChange}
+                  ref={fileInputRef}
+                  style={{ display: 'none' }}
+                />
+                
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<AddPhotoAlternate />}
+                    onClick={() => fileInputRef.current.click()}
+                    sx={{ flexShrink: 0 }}
                   >
-                    ×
-                  </button>
-                </div>
+                    Add Images
+                  </Button>
+                  
+                  {files.length > 0 && (
+                    <Typography variant="body2" color="text.secondary">
+                      {files.length} image(s) selected
+                    </Typography>
+                  )}
+                </Box>
+                
+                {previews.length > 0 && (
+                  <Box sx={{ 
+                    display: 'grid',
+                    gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)' },
+                    gap: 2,
+                    mb: 3
+                  }}>
+                    {previews.map((preview, index) => (
+                      <Box key={index} sx={{ position: 'relative' }}>
+                        <CardMedia
+                          component="img"
+                          image={preview}
+                          alt={`Preview ${index}`}
+                          sx={{ 
+                            borderRadius: 2,
+                            height: 120,
+                            objectFit: 'cover'
+                          }}
+                        />
+                        <IconButton
+                          size="small"
+                          onClick={() => removeImage(index)}
+                          sx={{
+                            position: 'absolute',
+                            top: 4,
+                            right: 4,
+                            backgroundColor: 'rgba(0,0,0,0.5)',
+                            color: 'white',
+                            '&:hover': {
+                              backgroundColor: 'rgba(0,0,0,0.7)'
+                            }
+                          }}
+                        >
+                          <Close fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+                
+                <Button
+                  type="submit"
+                  variant="contained"
+                  fullWidth
+                  size="large"
+                  startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <Send />}
+                  disabled={loading || !description.trim()}
+                  sx={{ mt: 2 }}
+                >
+                  {editingPost ? 'Update Post' : 'Create Post'}
+                </Button>
+              </Box>
+              
+              {error && (
+                <Box sx={{ mt: 2 }}>
+                  <ErrorMessage message={error} />
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+          
+          <Typography variant="h6" component="h3" gutterBottom sx={{ fontWeight: 'bold' }}>
+            Your Posts
+          </Typography>
+          
+          {loading && posts.length === 0 ? (
+            <LoadingSpinner />
+          ) : posts.length === 0 ? (
+            <Paper sx={{ p: 4, textAlign: 'center' }}>
+              <Typography variant="body1" color="text.secondary">
+                You haven't created any posts yet
+              </Typography>
+            </Paper>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {posts.map((post) => (
+                <Card key={post.id} sx={{ borderRadius: 3, boxShadow: 2 }}>
+                  <CardContent>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Avatar src={post.user?.avatar} alt={post.user?.name} />
+                        <Typography variant="subtitle1" fontWeight="bold">
+                          {post.user?.name || 'You'}
+                        </Typography>
+                      </Box>
+                      
+                      <Box>
+                        <Tooltip title="Edit">
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleEditPost(post)}
+                            sx={{ mr: 1 }}
+                          >
+                            <Edit fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        
+                        <Tooltip title="Delete">
+                          <IconButton 
+                            size="small" 
+                            onClick={() => {
+                              setPostToDelete(post.id);
+                              setOpenDeleteDialog(true);
+                            }}
+                            color="error"
+                          >
+                            <Delete fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    </Box>
+                    
+                    <Typography variant="body1" paragraph>
+                      {post.description}
+                    </Typography>
+                    
+                    {post.imageUrls?.length > 0 && (
+                      <Box sx={{ 
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+                        gap: 2,
+                        mt: 2
+                      }}>
+                        {post.imageUrls.map((url, index) => (
+                          <CardMedia
+                            key={index}
+                            component="img"
+                            image={url}
+                            alt={`Post image ${index}`}
+                            sx={{ 
+                              borderRadius: 2,
+                              maxHeight: 300,
+                              objectFit: 'cover'
+                            }}
+                          />
+                        ))}
+                      </Box>
+                    )}
+                    
+                    <Typography 
+                      variant="caption" 
+                      color="text.secondary"
+                      sx={{ display: 'block', mt: 2 }}
+                    >
+                      Posted on {new Date(post.createdAt).toLocaleString()}
+                    </Typography>
+                  </CardContent>
+                </Card>
               ))}
-            </div>
+            </Box>
           )}
+        </Grid>
+      </Grid>
 
-          <button 
-            type="submit" 
-            className="submit-btn" 
-            disabled={loading || !description.trim()}
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={openDeleteDialog}
+        onClose={() => setOpenDeleteDialog(false)}
+      >
+        <DialogTitle>Delete Post</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+            <Warning color="warning" fontSize="large" />
+            <Typography>
+              Are you sure you want to delete this post? This action cannot be undone.
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setOpenDeleteDialog(false)}
+            color="inherit"
           >
-            {loading ? (
-              <>
-                <LoadingSpinner small /> Posting...
-              </>
-            ) : (
-              'Create Post'
-            )}
-          </button>
-        </form>
-        
-        {error && <ErrorMessage message={error} />}
-      </div>
-    </div>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleDeletePost}
+            startIcon={loading ? <CircularProgress size={20} /> : <Delete />}
+            color="error"
+            variant="contained"
+            disabled={loading}
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   );
 };
-
-// CSS Styles (can be in a separate file or CSS-in-JS)
-const styles = `
-  .create-post-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: calc(100vh - 64px);
-    padding: 20px;
-    background-color: #f5f5f5;
-  }
-
-  .create-post-card {
-    background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-    padding: 32px;
-    width: 100%;
-    max-width: 500px;
-    transition: all 0.3s ease;
-  }
-
-  .create-post-title {
-    margin: 0 0 24px 0;
-    color: #333;
-    text-align: center;
-    font-size: 24px;
-  }
-
-  .create-post-form {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .form-group {
-    position: relative;
-  }
-
-  .post-textarea {
-    width: 100%;
-    min-height: 120px;
-    padding: 12px;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    font-size: 16px;
-    resize: vertical;
-    transition: border-color 0.3s;
-  }
-
-  .post-textarea:focus {
-    outline: none;
-    border-color: #646cff;
-    box-shadow: 0 0 0 2px rgba(100, 108, 255, 0.2);
-  }
-
-  .char-counter {
-    text-align: right;
-    font-size: 12px;
-    color: #666;
-    margin-top: 4px;
-  }
-
-  .char-counter.warning {
-    color: #ff6b6b;
-  }
-
-  .file-upload-section {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .upload-btn {
-    padding: 8px 16px;
-    background-color: #f0f0f0;
-    border: 1px dashed #ccc;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .upload-btn:hover {
-    background-color: #e9e9e9;
-    border-color: #999;
-  }
-
-  .file-count {
-    font-size: 14px;
-    color: #666;
-  }
-
-  .image-previews {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-    gap: 10px;
-    margin-top: 10px;
-  }
-
-  .image-preview-container {
-    position: relative;
-    aspect-ratio: 1;
-  }
-
-  .image-preview {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    border-radius: 8px;
-    border: 1px solid #eee;
-  }
-
-  .remove-image-btn {
-    position: absolute;
-    top: -8px;
-    right: -8px;
-    width: 24px;
-    height: 24px;
-    background: #ff4444;
-    color: white;
-    border: none;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    transition: all 0.2s;
-  }
-
-  .remove-image-btn:hover {
-    background: #cc0000;
-    transform: scale(1.1);
-  }
-
-  .submit-btn {
-    padding: 12px;
-    background-color: #646cff;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-size: 16px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color 0.3s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-  }
-
-  .submit-btn:hover {
-    background-color: #535bf2;
-  }
-
-  .submit-btn:disabled {
-    background-color: #ccc;
-    cursor: not-allowed;
-  }
-`;
-
-// Inject styles
-const styleSheet = document.createElement("style");
-styleSheet.innerText = styles;
-document.head.appendChild(styleSheet);
 
 export default CreatePost;

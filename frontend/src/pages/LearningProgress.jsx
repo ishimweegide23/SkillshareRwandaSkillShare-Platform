@@ -1,8 +1,58 @@
 import { useEffect, useState } from 'react';
 import { learningProgressAPI } from '../services/api';
+import { format } from 'date-fns';
+import {
+  Avatar,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  Grid,
+  IconButton,
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
+  MenuItem,
+  Paper,
+  Select,
+  TextField,
+  Typography,
+  Tooltip,
+  Badge,
+  Tabs,
+  Tab
+} from '@mui/material';
+import {
+  Add,
+  CheckCircle,
+  AccessTime,
+  Edit,
+  Delete,
+  Cancel,
+  Save,
+  FilterList,
+  Sort,
+  Refresh,
+  CalendarToday,
+  Schedule
+} from '@mui/icons-material';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
-import { format } from 'date-fns';
+
+const statusOptions = [
+  { value: 'not-started', label: 'Not Started', color: 'default' },
+  { value: 'in-progress', label: 'In Progress', color: 'primary' },
+  { value: 'completed', label: 'Completed', color: 'success' },
+  { value: 'on-hold', label: 'On Hold', color: 'warning' }
+];
 
 const LearningProgress = () => {
   const [progress, setProgress] = useState([]);
@@ -10,14 +60,18 @@ const LearningProgress = () => {
   const [error, setError] = useState(null);
   const [activeFilter, setActiveFilter] = useState('all');
   const [editingItem, setEditingItem] = useState(null);
-  const [showForm, setShowForm] = useState(false);
+  const [openForm, setOpenForm] = useState(false);
+  const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null);
+  const [sortBy, setSortBy] = useState('date-desc');
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     status: 'in-progress',
-    date: new Date().toISOString().split('T')[0],
+    date: format(new Date(), 'yyyy-MM-dd'),
     duration: 30
   });
+  const [formErrors, setFormErrors] = useState({});
 
   useEffect(() => {
     fetchProgress();
@@ -25,6 +79,7 @@ const LearningProgress = () => {
 
   const fetchProgress = async () => {
     try {
+      setLoading(true);
       const res = await learningProgressAPI.getProgress();
       setProgress(res.data);
       setError(null);
@@ -35,9 +90,16 @@ const LearningProgress = () => {
     }
   };
 
-  const filteredProgress = activeFilter === 'all' 
-    ? progress 
-    : progress.filter(item => item.status === activeFilter);
+  const validateForm = () => {
+    const errors = {};
+    if (!formData.title.trim()) errors.title = 'Title is required';
+    if (!formData.description.trim()) errors.description = 'Description is required';
+    if (!formData.date) errors.date = 'Date is required';
+    if (formData.duration <= 0) errors.duration = 'Duration must be positive';
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -45,21 +107,24 @@ const LearningProgress = () => {
       ...prev,
       [name]: value
     }));
+    
+    // Clear error when field is edited
+    if (formErrors[name]) {
+      setFormErrors(prev => ({
+        ...prev,
+        [name]: null
+      }));
+    }
   };
 
   const handleCreate = async () => {
+    if (!validateForm()) return;
+    
     try {
       setLoading(true);
       const res = await learningProgressAPI.createProgress(formData);
-      setProgress([...progress, res.data]);
-      setShowForm(false);
-      setFormData({
-        title: '',
-        description: '',
-        status: 'in-progress',
-        date: new Date().toISOString().split('T')[0],
-        duration: 30
-      });
+      setProgress(prev => [...prev, res.data]);
+      handleCloseForm();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to create learning item');
     } finally {
@@ -68,14 +133,15 @@ const LearningProgress = () => {
   };
 
   const handleUpdate = async () => {
+    if (!validateForm()) return;
+    
     try {
       setLoading(true);
       const res = await learningProgressAPI.updateProgress(editingItem.id, formData);
-      setProgress(progress.map(item => 
+      setProgress(prev => prev.map(item => 
         item.id === editingItem.id ? res.data : item
       ));
-      setEditingItem(null);
-      setShowForm(false);
+      handleCloseForm();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to update learning item');
     } finally {
@@ -83,13 +149,12 @@ const LearningProgress = () => {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this learning item?')) return;
-    
+  const handleDelete = async () => {
     try {
       setLoading(true);
-      await learningProgressAPI.deleteProgress(id);
-      setProgress(progress.filter(item => item.id !== id));
+      await learningProgressAPI.deleteProgress(itemToDelete);
+      setProgress(prev => prev.filter(item => item.id !== itemToDelete));
+      setOpenDeleteDialog(false);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to delete learning item');
     } finally {
@@ -106,7 +171,7 @@ const LearningProgress = () => {
       date: item.date.split('T')[0],
       duration: item.duration || 30
     });
-    setShowForm(true);
+    setOpenForm(true);
   };
 
   const handleSubmit = (e) => {
@@ -118,606 +183,384 @@ const LearningProgress = () => {
     }
   };
 
-  if (loading && !progress.length) return <FullPageLoading />;
-  if (error && !progress.length) return <FullPageError message={error} />;
+  const handleOpenDeleteDialog = (id) => {
+    setItemToDelete(id);
+    setOpenDeleteDialog(true);
+  };
+
+  const handleCloseForm = () => {
+    setOpenForm(false);
+    setEditingItem(null);
+    setFormData({
+      title: '',
+      description: '',
+      status: 'in-progress',
+      date: format(new Date(), 'yyyy-MM-dd'),
+      duration: 30
+    });
+    setFormErrors({});
+  };
+
+  const filteredProgress = progress.filter(item => {
+    if (activeFilter === 'all') return true;
+    return item.status === activeFilter;
+  }).sort((a, b) => {
+    switch (sortBy) {
+      case 'date-asc':
+        return new Date(a.date) - new Date(b.date);
+      case 'date-desc':
+        return new Date(b.date) - new Date(a.date);
+      case 'duration-asc':
+        return (a.duration || 0) - (b.duration || 0);
+      case 'duration-desc':
+        return (b.duration || 0) - (a.duration || 0);
+      default:
+        return 0;
+    }
+  });
+
+  const getStatusColor = (status) => {
+    const option = statusOptions.find(opt => opt.value === status);
+    return option?.color || 'default';
+  };
+
+  const getStatusLabel = (status) => {
+    const option = statusOptions.find(opt => opt.value === status);
+    return option?.label || status;
+  };
+
+  if (loading && !progress.length) return <LoadingSpinner fullScreen />;
+  if (error && !progress.length) return <ErrorMessage message={error} fullScreen />;
 
   return (
-    <div className="progress-container">
-      <div className="progress-header">
-        <h1 className="progress-title">Learning Progress</h1>
-        <div className="progress-actions">
-          <div className="progress-filters">
-            <button 
-              className={`filter-btn ${activeFilter === 'all' ? 'active' : ''}`}
-              onClick={() => setActiveFilter('all')}
-            >
-              All
-            </button>
-            <button 
-              className={`filter-btn ${activeFilter === 'completed' ? 'active' : ''}`}
-              onClick={() => setActiveFilter('completed')}
-            >
-              Completed
-            </button>
-            <button 
-              className={`filter-btn ${activeFilter === 'in-progress' ? 'active' : ''}`}
-              onClick={() => setActiveFilter('in-progress')}
-            >
-              In Progress
-            </button>
-          </div>
-          <button 
-            className="add-btn"
-            onClick={() => {
-              setEditingItem(null);
-              setShowForm(true);
-            }}
-          >
-            + Add New
-          </button>
-        </div>
-      </div>
+    <Box sx={{ 
+      minHeight: '100vh',
+      backgroundColor: '#f5f7fa',
+      p: { xs: 2, md: 4 }
+    }}>
+      <Grid container justifyContent="center">
+        <Grid item xs={12} md={10} lg={8}>
+          <Box sx={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            mb: 4,
+            flexWrap: 'wrap',
+            gap: 2
+          }}>
+            <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold' }}>
+              Learning Progress
+            </Typography>
+            
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                size="small"
+                sx={{ minWidth: 120 }}
+                startAdornment={<Sort fontSize="small" sx={{ mr: 1 }} />}
+              >
+                <MenuItem value="date-desc">Newest First</MenuItem>
+                <MenuItem value="date-asc">Oldest First</MenuItem>
+                <MenuItem value="duration-desc">Longest First</MenuItem>
+                <MenuItem value="duration-asc">Shortest First</MenuItem>
+              </Select>
+              
+              <Button
+                variant="contained"
+                startIcon={<Add />}
+                onClick={() => setOpenForm(true)}
+                sx={{ ml: 'auto' }}
+              >
+                Add New
+              </Button>
+            </Box>
+          </Box>
 
-      {showForm && (
-        <div className="progress-form-modal">
-          <div className="progress-form-container">
-            <h2>{editingItem ? 'Edit Learning Item' : 'Add New Learning Item'}</h2>
-            <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label>Title</label>
-                <input
-                  type="text"
+          <Tabs
+            value={activeFilter}
+            onChange={(e, newValue) => setActiveFilter(newValue)}
+            variant="scrollable"
+            scrollButtons="auto"
+            sx={{ mb: 3 }}
+          >
+            <Tab label="All" value="all" />
+            {statusOptions.map((status) => (
+              <Tab 
+                key={status.value}
+                label={status.label}
+                value={status.value}
+                icon={
+                  <Badge 
+                    badgeContent={
+                      progress.filter(p => p.status === status.value).length
+                    } 
+                    color={status.color}
+                    max={99}
+                  />
+                }
+                iconPosition="end"
+              />
+            ))}
+          </Tabs>
+
+          {filteredProgress.length === 0 ? (
+            <Paper sx={{ 
+              p: 4, 
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 2
+            }}>
+              <Typography variant="h6" color="textSecondary">
+                {activeFilter === 'all' 
+                  ? 'No learning items yet'
+                  : `No ${getStatusLabel(activeFilter).toLowerCase()} items`}
+              </Typography>
+              <Typography variant="body1" color="textSecondary">
+                {activeFilter === 'all'
+                  ? 'Start tracking your learning progress by adding your first item'
+                  : `You don't have any ${getStatusLabel(activeFilter).toLowerCase()} learning items`}
+              </Typography>
+              <Button
+                variant="contained"
+                startIcon={<Add />}
+                onClick={() => setOpenForm(true)}
+                sx={{ mt: 2 }}
+              >
+                Add Learning Item
+              </Button>
+            </Paper>
+          ) : (
+            <List sx={{ width: '100%', bgcolor: 'background.paper' }}>
+              {filteredProgress.map((item) => (
+                <Card 
+                  key={item.id} 
+                  sx={{ 
+                    mb: 2,
+                    borderLeft: `4px solid`,
+                    borderColor: `${getStatusColor(item.status)}.main`,
+                    transition: 'transform 0.2s, box-shadow 0.2s',
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      boxShadow: 3
+                    }
+                  }}
+                >
+                  <CardContent>
+                    <Box sx={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      gap: 2
+                    }}>
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="h6" component="div">
+                          {item.title}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                          {item.description}
+                        </Typography>
+                      </Box>
+                      
+                      <Chip
+                        label={getStatusLabel(item.status)}
+                        color={getStatusColor(item.status)}
+                        size="small"
+                        sx={{ ml: 'auto' }}
+                      />
+                    </Box>
+                    
+                    <Box sx={{ 
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      mt: 2,
+                      gap: 2
+                    }}>
+                      <Box sx={{ display: 'flex', gap: 2 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center' }}>
+                          <CalendarToday fontSize="small" sx={{ mr: 0.5 }} />
+                          {format(new Date(item.date), 'MMM d, yyyy')}
+                        </Typography>
+                        
+                        {item.duration && (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Schedule fontSize="small" sx={{ mr: 0.5 }} />
+                            {item.duration} mins
+                          </Typography>
+                        )}
+                      </Box>
+                      
+                      <Box>
+                        <Tooltip title="Edit">
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleEdit(item)}
+                            color="primary"
+                          >
+                            <Edit fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        
+                        <Tooltip title="Delete">
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleOpenDeleteDialog(item.id)}
+                            color="error"
+                          >
+                            <Delete fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    </Box>
+                  </CardContent>
+                </Card>
+              ))}
+            </List>
+          )}
+        </Grid>
+      </Grid>
+
+      {/* Add/Edit Form Dialog */}
+      <Dialog 
+        open={openForm} 
+        onClose={handleCloseForm}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>
+          {editingItem ? 'Edit Learning Item' : 'Add New Learning Item'}
+        </DialogTitle>
+        <DialogContent dividers>
+          <form onSubmit={handleSubmit}>
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Title"
                   name="title"
                   value={formData.title}
                   onChange={handleInputChange}
+                  error={!!formErrors.title}
+                  helperText={formErrors.title}
                   required
                 />
-              </div>
+              </Grid>
               
-              <div className="form-group">
-                <label>Description</label>
-                <textarea
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Description"
                   name="description"
                   value={formData.description}
                   onChange={handleInputChange}
+                  multiline
+                  rows={4}
+                  error={!!formErrors.description}
+                  helperText={formErrors.description}
                   required
                 />
-              </div>
+              </Grid>
               
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Status</label>
-                  <select
-                    name="status"
-                    value={formData.status}
-                    onChange={handleInputChange}
-                  >
-                    <option value="in-progress">In Progress</option>
-                    <option value="completed">Completed</option>
-                  </select>
-                </div>
-                
-                <div className="form-group">
-                  <label>Date</label>
-                  <input
-                    type="date"
-                    name="date"
-                    value={formData.date}
-                    onChange={handleInputChange}
-                    required
-                  />
-                </div>
-                
-                <div className="form-group">
-                  <label>Duration (mins)</label>
-                  <input
-                    type="number"
-                    name="duration"
-                    value={formData.duration}
-                    onChange={handleInputChange}
-                    min="1"
-                  />
-                </div>
-              </div>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Date"
+                  name="date"
+                  type="date"
+                  value={formData.date}
+                  onChange={handleInputChange}
+                  InputLabelProps={{ shrink: true }}
+                  error={!!formErrors.date}
+                  helperText={formErrors.date}
+                  required
+                />
+              </Grid>
               
-              <div className="form-actions">
-                <button 
-                  type="button" 
-                  className="cancel-btn"
-                  onClick={() => setShowForm(false)}
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Duration (minutes)"
+                  name="duration"
+                  type="number"
+                  value={formData.duration}
+                  onChange={handleInputChange}
+                  inputProps={{ min: 1 }}
+                  error={!!formErrors.duration}
+                  helperText={formErrors.duration}
+                />
+              </Grid>
+              
+              <Grid item xs={12}>
+                <Select
+                  fullWidth
+                  label="Status"
+                  name="status"
+                  value={formData.status}
+                  onChange={handleInputChange}
                 >
-                  Cancel
-                </button>
-                <button 
-                  type="submit" 
-                  className="save-btn"
-                  disabled={loading}
-                >
-                  {loading ? 'Saving...' : 'Save'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+                  {statusOptions.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </Grid>
+            </Grid>
+          </form>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={handleCloseForm}
+            startIcon={<Cancel />}
+            color="inherit"
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleSubmit}
+            startIcon={loading ? <CircularProgress size={20} /> : <Save />}
+            variant="contained"
+            disabled={loading}
+          >
+            {editingItem ? 'Update' : 'Save'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
-      <div className="progress-content">
-        {filteredProgress.length === 0 ? (
-          <div className="empty-progress">
-            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-            </svg>
-            <h3>No progress updates yet</h3>
-            <p>Start learning to track your progress!</p>
-            <button 
-              className="add-btn"
-              onClick={() => setShowForm(true)}
-            >
-              + Add Your First Item
-            </button>
-          </div>
-        ) : (
-          <div className="progress-timeline">
-            {filteredProgress.map(item => (
-              <ProgressItem 
-                key={item.id} 
-                item={item} 
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={openDeleteDialog}
+        onClose={() => setOpenDeleteDialog(false)}
+      >
+        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete this learning item? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setOpenDeleteDialog(false)}
+            color="inherit"
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleDelete}
+            startIcon={loading ? <CircularProgress size={20} /> : <Delete />}
+            color="error"
+            variant="contained"
+            disabled={loading}
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   );
 };
-
-const FullPageLoading = () => (
-  <div className="full-page-center">
-    <LoadingSpinner size="large" />
-  </div>
-);
-
-const FullPageError = ({ message }) => (
-  <div className="full-page-center">
-    <ErrorMessage message={message} />
-    <button 
-      className="retry-btn"
-      onClick={() => window.location.reload()}
-    >
-      Refresh Page
-    </button>
-  </div>
-);
-
-const ProgressItem = ({ item, onEdit, onDelete }) => (
-  <div className={`progress-item ${item.status}`}>
-    <div className="progress-dot"></div>
-    <div className="progress-content">
-      <div className="progress-header">
-        <h3 className="progress-title">{item.title}</h3>
-        <div className="item-actions">
-          <span className={`progress-status ${item.status}`}>
-            {item.status === 'completed' ? '✓ Completed' : 'In Progress'}
-          </span>
-          <button className="edit-btn" onClick={() => onEdit(item)}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-            </svg>
-          </button>
-          <button className="delete-btn" onClick={() => onDelete(item.id)}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M3 6h18" />
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-            </svg>
-          </button>
-        </div>
-      </div>
-      <p className="progress-description">{item.description}</p>
-      <div className="progress-meta">
-        <span className="progress-date">
-          {format(new Date(item.date), 'MMM d, yyyy')}
-        </span>
-        {item.duration && (
-          <span className="progress-duration">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
-            </svg>
-            {item.duration} mins
-          </span>
-        )}
-      </div>
-    </div>
-  </div>
-);
-
-// CSS Styles
-const styles = `
-  .progress-container {
-    min-height: 100vh;
-    background-color: #f8f9fa;
-    padding: 24px;
-    max-width: 800px;
-    margin: 0 auto;
-    position: relative;
-  }
-
-  .full-page-center {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-    background-color: #f8f9fa;
-    padding: 20px;
-  }
-
-  .progress-header {
-    margin-bottom: 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .progress-actions {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 16px;
-  }
-
-  .progress-title {
-    font-size: 28px;
-    color: #333;
-    margin: 0;
-  }
-
-  .progress-filters {
-    display: flex;
-    gap: 8px;
-  }
-
-  .filter-btn {
-    padding: 6px 12px;
-    background-color: #fff;
-    border: 1px solid #ddd;
-    border-radius: 20px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: all 0.2s;
-  }
-
-  .filter-btn:hover {
-    background-color: #f0f0f0;
-  }
-
-  .filter-btn.active {
-    background-color: #646cff;
-    color: white;
-    border-color: #646cff;
-  }
-
-  .add-btn {
-    padding: 8px 16px;
-    background-color: #646cff;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: all 0.3s;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-
-  .add-btn:hover {
-    background-color: #535bf2;
-  }
-
-  .progress-form-modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0,0,0,0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-    padding: 20px;
-  }
-
-  .progress-form-container {
-    background-color: white;
-    border-radius: 12px;
-    padding: 24px;
-    width: 100%;
-    max-width: 600px;
-    max-height: 90vh;
-    overflow-y: auto;
-  }
-
-  .progress-form-container h2 {
-    margin-top: 0;
-    margin-bottom: 20px;
-    color: #333;
-  }
-
-  .form-group {
-    margin-bottom: 16px;
-  }
-
-  .form-group label {
-    display: block;
-    margin-bottom: 6px;
-    font-weight: 500;
-    color: #555;
-  }
-
-  .form-group input,
-  .form-group textarea,
-  .form-group select {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    font-size: 16px;
-  }
-
-  .form-group textarea {
-    min-height: 100px;
-    resize: vertical;
-  }
-
-  .form-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 16px;
-  }
-
-  .form-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-    margin-top: 24px;
-  }
-
-  .save-btn {
-    padding: 10px 20px;
-    background-color: #646cff;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 16px;
-    transition: background-color 0.3s;
-  }
-
-  .save-btn:hover {
-    background-color: #535bf2;
-  }
-
-  .save-btn:disabled {
-    background-color: #ccc;
-    cursor: not-allowed;
-  }
-
-  .cancel-btn {
-    padding: 10px 20px;
-    background-color: #f0f0f0;
-    color: #333;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 16px;
-    transition: background-color 0.3s;
-  }
-
-  .cancel-btn:hover {
-    background-color: #e0e0e0;
-  }
-
-  .empty-progress {
-    text-align: center;
-    padding: 40px 20px;
-    background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-  }
-
-  .empty-progress svg {
-    margin-bottom: 16px;
-    color: #ccc;
-  }
-
-  .empty-progress h3 {
-    margin: 8px 0;
-    color: #333;
-  }
-
-  .empty-progress p {
-    color: #666;
-    margin: 0 0 16px 0;
-  }
-
-  .progress-timeline {
-    position: relative;
-    padding-left: 24px;
-  }
-
-  .progress-timeline::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 11px;
-    width: 2px;
-    background-color: #e0e0e0;
-  }
-
-  .progress-item {
-    position: relative;
-    background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    padding: 20px;
-    margin-bottom: 20px;
-    transition: transform 0.2s, box-shadow 0.2s;
-  }
-
-  .progress-item:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  }
-
-  .progress-item.completed {
-    border-left: 4px solid #4caf50;
-  }
-
-  .progress-item.in-progress {
-    border-left: 4px solid #2196f3;
-  }
-
-  .progress-dot {
-    position: absolute;
-    left: -30px;
-    top: 24px;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background-color: #fff;
-    border: 4px solid #646cff;
-    z-index: 1;
-  }
-
-  .progress-item.completed .progress-dot {
-    border-color: #4caf50;
-  }
-
-  .progress-item.in-progress .progress-dot {
-    border-color: #2196f3;
-  }
-
-  .progress-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 8px;
-  }
-
-  .item-actions {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  }
-
-  .edit-btn, .delete-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #666;
-    transition: color 0.2s;
-  }
-
-  .edit-btn:hover {
-    color: #2196f3;
-  }
-
-  .delete-btn:hover {
-    color: #f44336;
-  }
-
-  .progress-title {
-    margin: 0;
-    font-size: 18px;
-    color: #333;
-    flex: 1;
-  }
-
-  .progress-status {
-    font-size: 12px;
-    padding: 4px 8px;
-    border-radius: 12px;
-    font-weight: 500;
-  }
-
-  .progress-status.completed {
-    background-color: #e8f5e9;
-    color: #4caf50;
-  }
-
-  .progress-status.in-progress {
-    background-color: #e3f2fd;
-    color: #2196f3;
-  }
-
-  .progress-description {
-    margin: 8px 0;
-    color: #555;
-    line-height: 1.5;
-  }
-
-  .progress-meta {
-    display: flex;
-    gap: 16px;
-    font-size: 12px;
-    color: #888;
-  }
-
-  .progress-duration {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-
-  .retry-btn {
-    margin-top: 16px;
-    padding: 10px 20px;
-    background-color: #646cff;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 16px;
-    transition: background-color 0.3s;
-  }
-
-  .retry-btn:hover {
-    background-color: #535bf2;
-  }
-
-  @media (max-width: 768px) {
-    .progress-container {
-      padding: 16px;
-    }
-    
-    .progress-title {
-      font-size: 24px;
-    }
-    
-    .progress-item {
-      padding: 16px;
-    }
-
-    .form-row {
-      grid-template-columns: 1fr;
-    }
-  }
-`;
-
-// Inject styles
-const styleSheet = document.createElement("style");
-styleSheet.innerText = styles;
-document.head.appendChild(styleSheet);
 
 export default LearningProgress;
