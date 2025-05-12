@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { postAPI } from '../services/api';
+import { postAPI, API_URL } from '../services/api';
 import {
   Avatar,
   Box,
@@ -57,7 +57,7 @@ const CreatePost = () => {
     try {
       setLoading(true);
       const res = await postAPI.getFeed();
-      setPosts(res.data.data || []);
+      setPosts(res.data.content || []);
     } catch (err) {
       setError('Failed to load posts');
     } finally {
@@ -279,75 +279,53 @@ const CreatePost = () => {
             </Paper>
           ) : (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              {posts.map((post) => (
-                <Card key={post.id} sx={{ borderRadius: 3, boxShadow: 2 }}>
+              {posts.map((post, idx) => (
+                <Card key={post.id} sx={{ mb: 3, borderRadius: 2, boxShadow: 2 }}>
                   <CardContent>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Avatar src={post.user?.avatar} alt={post.user?.name} />
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                      <Avatar src={post.user?.avatar} alt={post.user?.name} />
+                      <Box>
                         <Typography variant="subtitle1" fontWeight="bold">
                           {post.user?.name || 'You'}
                         </Typography>
-                      </Box>
-                      
-                      <Box>
-                        <Tooltip title="Edit">
-                          <IconButton 
-                            size="small" 
-                            onClick={() => handleEditPost(post)}
-                            sx={{ mr: 1 }}
-                          >
-                            <Edit fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        
-                        <Tooltip title="Delete">
-                          <IconButton 
-                            size="small" 
-                            onClick={() => {
-                              setPostToDelete(post.id);
-                              setOpenDeleteDialog(true);
-                            }}
-                            color="error"
-                          >
-                            <Delete fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+                        {post.user?.title && (
+                          <Typography variant="caption" color="text.secondary">
+                            {post.user.title}
+                          </Typography>
+                        )}
                       </Box>
                     </Box>
-                    
                     <Typography variant="body1" paragraph>
                       {post.description}
                     </Typography>
-                    
-                    {post.imageUrls?.length > 0 && (
-                      <Box sx={{ 
-                        display: 'grid',
-                        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                        gap: 2,
-                        mt: 2
-                      }}>
-                        {post.imageUrls.map((url, index) => (
-                          <CardMedia
-                            key={index}
-                            component="img"
-                            image={url}
-                            alt={`Post image ${index}`}
-                            sx={{ 
-                              borderRadius: 2,
-                              maxHeight: 300,
-                              objectFit: 'cover'
-                            }}
+                    {/* Hybrid image display: show previews for the most recent post, backend images for others */}
+                    {idx === 0 && previews.length > 0 ? (
+                      <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+                        {previews.map((preview, i) => (
+                          <img
+                            key={i}
+                            src={preview}
+                            alt={`Preview ${i}`}
+                            style={{ width: 200, borderRadius: 8 }}
                           />
                         ))}
                       </Box>
+                    ) : (
+                      post.imageUrls?.length > 0 && (
+                        <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+                          {post.imageUrls.map((url, i) => (
+                            <img
+                              key={i}
+                              src={url.startsWith('http') ? url : `${API_URL}${url}`}
+                              alt={`Post image ${i}`}
+                              style={{ width: 200, borderRadius: 8 }}
+                              onError={e => { e.target.src = '/fallback.png'; }}
+                            />
+                          ))}
+                        </Box>
+                      )
                     )}
-                    
-                    <Typography 
-                      variant="caption" 
-                      color="text.secondary"
-                      sx={{ display: 'block', mt: 2 }}
-                    >
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 2 }}>
                       Posted on {new Date(post.createdAt).toLocaleString()}
                     </Typography>
                   </CardContent>
