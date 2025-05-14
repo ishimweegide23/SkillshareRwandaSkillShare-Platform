@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+// Use VITE_API_URL if defined, fallback to localhost
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8081';
 
+// Create an Axios instance
 const api = axios.create({
   baseURL: `${API_URL}/api`,
   headers: {
@@ -9,38 +11,67 @@ const api = axios.create({
   },
 });
 
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+// Global response error handler
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response) {
+      console.error('API Error:', error.response.data);
+      return Promise.reject(error);
+    }
+    return Promise.reject(error);
   }
-  return config;
-});
+);
+
+// --- API Functions ---
 
 export const authAPI = {
   register: (userData) => api.post('/auth/register', userData),
   login: (credentials) => api.post('/auth/login', credentials),
+  refreshToken: () => api.post('/auth/refresh-token'),
 };
 
 export const userAPI = {
   getProfile: () => api.get('/users/profile'),
   updateProfile: (userData) => api.put('/users/profile', userData),
+  uploadAvatar: (file) => {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    return api.post('/users/avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };
 
 export const postAPI = {
   createPost: (postData) => api.post('/posts', postData),
   createPostWithImages: (description, files) => {
     const formData = new FormData();
-    formData.append('description', description);
-    files.forEach(file => formData.append('files', file));
+    formData.append('description', description || '');
+    if (files && files.length > 0) {
+      files.forEach(file => formData.append('files', file));
+    }
     return api.post('/posts/with-images', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
-  getFeed: () => api.get('/posts'),
+  getFeed: (page = 0, size = 10) => api.get(`/posts?page=${page}&size=${size}`),
+  getPost: (postId) => api.get(`/posts/${postId}`),
+  updatePost: (postId, postData) => {
+    if (postData.files && postData.files.length > 0) {
+      const formData = new FormData();
+      formData.append('description', postData.description || '');
+      postData.files.forEach(file => formData.append('files', file));
+      return api.put(`/posts/${postId}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    }
+    return api.put(`/posts/${postId}`, { description: postData.description || '' });
+  },
+  deletePost: (postId) => api.delete(`/posts/${postId}`),
   likePost: (postId) => api.post(`/posts/${postId}/like`),
   unlikePost: (postId) => api.delete(`/posts/${postId}/like`),
-  getPost: (postId) => api.get(`/posts/${postId}`),
+  getPostComments: (postId) => api.get(`/posts/${postId}/comments`),
 };
 
 export const commentAPI = {
@@ -53,11 +84,31 @@ export const commentAPI = {
 export const notificationAPI = {
   getNotifications: () => api.get('/notifications'),
   markAsRead: (id) => api.put(`/notifications/${id}/read`),
+  markAllAsRead: () => api.put('/notifications/read-all'),
   deleteNotification: (id) => api.delete(`/notifications/${id}`),
 };
 
 export const learningProgressAPI = {
   getProgress: () => api.get('/learning-progress'),
+  updateProgress: (data) => api.put('/learning-progress', data),
 };
 
-export default api; 
+// Utility error handler
+export const handleApiError = (error) => {
+  if (error.response) {
+    console.error('API Error Response:', {
+      status: error.response.status,
+      data: error.response.data,
+      headers: error.response.headers,
+    });
+    return error.response.data.message || 'An error occurred';
+  } else if (error.request) {
+    console.error('API Error Request:', error.request);
+    return 'No response from server';
+  } else {
+    console.error('API Error:', error.message);
+    return error.message || 'An error occurred';
+  }
+};
+
+export default api;

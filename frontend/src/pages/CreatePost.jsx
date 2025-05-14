@@ -20,7 +20,11 @@ import {
   Paper,
   TextField,
   Typography,
-  Tooltip
+  Tooltip,
+  CardHeader,
+  Menu,
+  MenuItem,
+  ListItemIcon
 } from '@mui/material';
 import {
   AddPhotoAlternate,
@@ -29,7 +33,8 @@ import {
   Edit,
   Send,
   Image,
-  Warning
+  Warning,
+  MoreVert
 } from '@mui/icons-material';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
@@ -46,6 +51,8 @@ const CreatePost = () => {
   const [editingPost, setEditingPost] = useState(null);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [postToDelete, setPostToDelete] = useState(null);
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [currentPostId, setCurrentPostId] = useState(null);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
 
@@ -60,6 +67,7 @@ const CreatePost = () => {
       setPosts(res.data.content || []);
     } catch (err) {
       setError('Failed to load posts');
+      setPosts([]);
     } finally {
       setLoading(false);
     }
@@ -101,19 +109,28 @@ const CreatePost = () => {
     try {
       if (editingPost) {
         // Update existing post
-        await postAPI.updatePost(editingPost.id, { description, files });
+        const response = await postAPI.updatePost(editingPost.id, { description, files });
+        if (response.data) {
+          // Clear form and fetch updated posts
+          setDescription('');
+          setFiles([]);
+          setPreviews([]);
+          setEditingPost(null);
+          await fetchPosts();
+        }
       } else {
         // Create new post
-        await postAPI.createPostWithImages(description, files);
+        const response = await postAPI.createPostWithImages(description, files);
+        if (response.data) {
+          // Clear form and fetch updated posts
+          setDescription('');
+          setFiles([]);
+          setPreviews([]);
+          await fetchPosts();
+        }
       }
-      
-      // Clear form and fetch updated posts
-      setDescription('');
-      setFiles([]);
-      setPreviews([]);
-      setEditingPost(null);
-      await fetchPosts();
     } catch (err) {
+      console.error('Error saving post:', err);
       setError(err.response?.data?.message || 'Failed to save post');
     } finally {
       setLoading(false);
@@ -126,6 +143,7 @@ const CreatePost = () => {
       await postAPI.deletePost(postToDelete);
       await fetchPosts();
       setOpenDeleteDialog(false);
+      setPostToDelete(null)
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to delete post');
     } finally {
@@ -133,11 +151,27 @@ const CreatePost = () => {
     }
   };
 
-  const handleEditPost = (post) => {
+  const handleEditPost = (post) => {  
     setEditingPost(post);
     setDescription(post.description);
     // Note: You can't edit existing images in this implementation
     // You would need to handle that differently in your API
+  };
+
+  const handleMenuOpen = (event, postId) => {
+    setAnchorEl(event.currentTarget);
+    setCurrentPostId(postId);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+    setCurrentPostId(null);
+  };
+
+  const handleDeleteClick = (postId) => {
+    setPostToDelete(postId);
+    setOpenDeleteDialog(true);
+    handleMenuClose();
   };
 
   const charsRemaining = MAX_CHARS - description.length;
@@ -279,55 +313,91 @@ const CreatePost = () => {
             </Paper>
           ) : (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              {posts.map((post, idx) => (
+              {posts.map((post) => (
                 <Card key={post.id} sx={{ mb: 3, borderRadius: 2, boxShadow: 2 }}>
+                  <CardHeader
+                    avatar={
+                      <Avatar>
+                        <Image />
+                      </Avatar>
+                    }
+                    action={
+                      <>
+                        <IconButton 
+                          aria-label="settings"
+                          onClick={(e) => handleMenuOpen(e, post.id)}
+                        >
+                          <MoreVert />
+                        </IconButton>
+                        <Menu
+                          anchorEl={anchorEl}
+                          open={Boolean(anchorEl) && currentPostId === post.id}
+                          onClose={handleMenuClose}
+                          anchorOrigin={{
+                            vertical: 'top',
+                            horizontal: 'right',
+                          }}
+                          transformOrigin={{
+                            vertical: 'top',
+                            horizontal: 'right',
+                          }}
+                        >
+                          <MenuItem onClick={() => {
+                            handleEditPost(post);
+                            handleMenuClose();
+                          }}>
+                            <ListItemIcon>
+                              <Edit fontSize="small" />
+                            </ListItemIcon>
+                            <Typography variant="body2">Edit</Typography>
+                          </MenuItem>
+                          <MenuItem onClick={() => handleDeleteClick(post.id)}>
+                            <ListItemIcon>
+                              <Delete fontSize="small" color="error" />
+                            </ListItemIcon>
+                            <Typography variant="body2" color="error">Delete</Typography>
+                          </MenuItem>
+                        </Menu>
+                      </>
+                    }
+                    title={
+                      <Typography variant="subtitle1" fontWeight="bold">
+                        Post
+                      </Typography>
+                    }
+                    subheader={
+                      <Typography variant="caption" display="block" color="text.secondary">
+                        Posted on {new Date(post.createdAt).toLocaleString()}
+                      </Typography>
+                    }
+                  />
                   <CardContent>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                      <Avatar src={post.user?.avatar} alt={post.user?.name} />
-                      <Box>
-                        <Typography variant="subtitle1" fontWeight="bold">
-                          {post.user?.name || 'You'}
-                        </Typography>
-                        {post.user?.title && (
-                          <Typography variant="caption" color="text.secondary">
-                            {post.user.title}
-                          </Typography>
-                        )}
-                      </Box>
-                    </Box>
                     <Typography variant="body1" paragraph>
                       {post.description}
                     </Typography>
-                    {/* Hybrid image display: show previews for the most recent post, backend images for others */}
-                    {idx === 0 && previews.length > 0 ? (
-                      <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-                        {previews.map((preview, i) => (
-                          <img
+                    {post.imageUrls?.length > 0 && (
+                      <Box sx={{ 
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+                        gap: 2,
+                        mt: 2
+                      }}>
+                        {post.imageUrls.map((url, i) => (
+                          <CardMedia
                             key={i}
-                            src={preview}
-                            alt={`Preview ${i}`}
-                            style={{ width: 200, borderRadius: 8 }}
+                            component="img"
+                            image={url.startsWith('http') ? url : `${API_URL}${url}`}
+                            alt={`Post image ${i}`}
+                            sx={{ 
+                              borderRadius: 2,
+                              maxHeight: 300,
+                              objectFit: 'cover'
+                            }}
+                            onError={e => { e.target.src = '/fallback.png'; }}
                           />
                         ))}
                       </Box>
-                    ) : (
-                      post.imageUrls?.length > 0 && (
-                        <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-                          {post.imageUrls.map((url, i) => (
-                            <img
-                              key={i}
-                              src={url.startsWith('http') ? url : `${API_URL}${url}`}
-                              alt={`Post image ${i}`}
-                              style={{ width: 200, borderRadius: 8 }}
-                              onError={e => { e.target.src = '/fallback.png'; }}
-                            />
-                          ))}
-                        </Box>
-                      )
                     )}
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 2 }}>
-                      Posted on {new Date(post.createdAt).toLocaleString()}
-                    </Typography>
                   </CardContent>
                 </Card>
               ))}

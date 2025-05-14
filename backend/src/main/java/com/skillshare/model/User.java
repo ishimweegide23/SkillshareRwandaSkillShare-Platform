@@ -9,6 +9,10 @@ import lombok.AllArgsConstructor;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.List;
+import jakarta.persistence.ManyToMany;
+import java.util.ArrayList;
+
 
 @Data
 @NoArgsConstructor
@@ -29,11 +33,8 @@ public class User {
     private String resetPasswordToken;
     private String resetPasswordExpiry;
 
-    @DBRef
-    private Set<User> followers = new HashSet<>();
-
-    @DBRef
-    private Set<User> following = new HashSet<>();
+    @ManyToMany
+    private List<User> following = new ArrayList<>();
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

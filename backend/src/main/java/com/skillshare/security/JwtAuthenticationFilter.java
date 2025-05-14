@@ -26,23 +26,41 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private UserDetailsService userDetailsService;
 
     @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        boolean skip = path.startsWith("/api/auth/")
+                    || path.startsWith("/api/public/")
+                    || path.startsWith("/uploads/")
+                    || (request.getMethod().equals("GET") && path.startsWith("/api/posts"));
+
+        System.out.println("[JwtFilter] shouldNotFilter: " + skip + " | Path: " + path + " | Method: " + request.getMethod());
+
+        return skip;
+    }
+
+    @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         try {
             String jwt = getJwtFromRequest(request);
+            System.out.println("[JwtFilter] JWT: " + jwt);
 
             if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
                 String username = tokenProvider.getUsernameFromToken(jwt);
                 UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-                
+
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                         userDetails, null, userDetails.getAuthorities());
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
+                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(authentication);
+
+                System.out.println("[JwtFilter] Authenticated user: " + username);
+            } else {
+                System.out.println("[JwtFilter] Invalid or missing JWT.");
             }
         } catch (Exception ex) {
-            logger.error("Could not set user authentication in security context", ex);
+            System.err.println("[JwtFilter] Failed to authenticate: " + ex.getMessage());
         }
 
         filterChain.doFilter(request, response);
@@ -55,4 +73,4 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
         return null;
     }
-} 
+}
