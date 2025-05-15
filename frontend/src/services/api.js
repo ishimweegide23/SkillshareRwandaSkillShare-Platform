@@ -96,6 +96,14 @@ export const learningProgressAPI = {
   deleteProgress: (id) => api.delete(`/learning-progress/${id}`)
 };
 
+export const feedAPI = {
+  getAllFeeds: () => api.get('/feed'),
+  getFeedById: (id) => api.get(`/feed/${id}`),
+  createFeed: (data) => api.post('/feed', data),
+  updateFeed: (id, data) => api.put(`/feed/${id}`, data),
+  deleteFeed: (id) => api.delete(`/feed/${id}`)
+};
+
 // Utility error handler
 export const handleApiError = (error) => {
   if (error.response) {
