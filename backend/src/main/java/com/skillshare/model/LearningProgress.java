@@ -6,7 +6,7 @@ import org.springframework.data.mongodb.core.mapping.DBRef;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 @Data
 @NoArgsConstructor
@@ -17,20 +17,21 @@ public class LearningProgress {
     private String id;
     private String title;
     private String description;
-    private int progress;
+    private String status;
+    private LocalDate date;
+    private Integer duration;
+    private LocalDate createdAt;
+    private LocalDate updatedAt;
 
     @DBRef
     private User user;
 
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
-
     public void onCreate() {
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
+        this.createdAt = LocalDate.now();
+        this.updatedAt = LocalDate.now();
     }
 
     public void onUpdate() {
-        this.updatedAt = LocalDateTime.now();
+        this.updatedAt = LocalDate.now();
     }
 } 

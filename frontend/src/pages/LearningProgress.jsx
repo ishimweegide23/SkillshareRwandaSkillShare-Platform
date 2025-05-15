@@ -81,10 +81,14 @@ const LearningProgress = () => {
     try {
       setLoading(true);
       const res = await learningProgressAPI.getProgress();
-      setProgress(res.data);
+      console.log('API Response:', res);
+      // Ensure we're setting an array
+      setProgress(Array.isArray(res.data) ? res.data : []);
       setError(null);
     } catch (err) {
+      console.error('Error fetching progress:', err);
       setError('Failed to load learning progress. Please try again.');
+      setProgress([]); // Set empty array on error
     } finally {
       setLoading(false);
     }

@@ -90,7 +90,10 @@ export const notificationAPI = {
 
 export const learningProgressAPI = {
   getProgress: () => api.get('/learning-progress'),
-  updateProgress: (data) => api.put('/learning-progress', data),
+  getProgressById: (id) => api.get(`/learning-progress/${id}`),
+  createProgress: (data) => api.post('/learning-progress', data),
+  updateProgress: (id, data) => api.put(`/learning-progress/${id}`, data),
+  deleteProgress: (id) => api.delete(`/learning-progress/${id}`)
 };
 
 // Utility error handler
