@@ -32,7 +32,15 @@ import {
 } from '@mui/icons-material';
 import { feedAPI } from '../services/api';
 
-const categories = ['IT', 'Music', 'Beauty', 'Programming', 'Art', 'Business', 'Other'];
+const categories = [
+  { name: 'IT', image: 'https://images.unsplash.com/photo-1517430816045-df4b7de11d1d?w=200' },
+  { name: 'Music', image: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=200' },
+  { name: 'Beauty', image: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=200' },
+  { name: 'Programming', image: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=200' },
+  { name: 'Art', image: 'https://images.unsplash.com/photo-1547891654-e66ed7ebb968?w=200' },
+  { name: 'Business', image: 'https://images.unsplash.com/photo-1444653614773-995cb1ef9efa?w=200' },
+  { name: 'Other', image: 'https://images.unsplash.com/photo-1493612276216-ee3925520721?w=200' }
+];
 
 const Feed = () => {
   const [posts, setPosts] = useState([]);
@@ -173,7 +181,7 @@ const Feed = () => {
               onClick={() => setOpenDialog(true)}
               sx={{ height: 'fit-content' }}
             >
-              New Post
+              Create Feed
             </Button>
           </Box>
           
@@ -191,10 +199,11 @@ const Feed = () => {
             />
             {categories.map((category) => (
               <Chip
-                key={category}
-                label={category}
-                onClick={() => setSelectedCategory(category)}
-                color={selectedCategory === category ? 'primary' : 'default'}
+                key={category.name}
+                label={category.name}
+                onClick={() => setSelectedCategory(category.name)}
+                color={selectedCategory === category.name ? 'primary' : 'default'}
+                avatar={<Avatar src={category.image} />}
                 sx={{ mb: 1 }}
               />
             ))}
@@ -202,102 +211,84 @@ const Feed = () => {
         </Paper>
 
         <Grid container spacing={3} sx={{ flexGrow: 1 }}>
-          {posts.length > 0 ? (
-            posts.map((post) => (
-              <Grid item xs={12} key={post.id}>
-                <Card sx={{ 
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  transition: 'transform 0.2s',
-                  '&:hover': {
-                    transform: 'translateY(-2px)',
-                    boxShadow: 6,
-                  }
-                }}>
-                  <CardContent sx={{ flexGrow: 1 }}>
-                    <Box sx={{ 
-                      display: 'flex', 
-                      justifyContent: 'space-between', 
-                      alignItems: 'center', 
-                      mb: 2 
-                    }}>
-                      <Typography variant="h6" component="h2" sx={{ fontWeight: 'bold' }}>
-                        {post.title}
-                      </Typography>
-                      <Chip 
-                        label={post.category} 
-                        color="primary" 
-                        size="small" 
-                        sx={{ fontWeight: 'bold' }}
-                      />
-                    </Box>
-                    <Typography variant="body1" paragraph sx={{ whiteSpace: 'pre-line' }}>
-                      {post.content}
+          {posts.map((post) => (
+            <Grid item xs={12} key={post.id}>
+              <Card sx={{ 
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                transition: 'transform 0.2s',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: 6,
+                }
+              }}>
+                <CardContent sx={{ flexGrow: 1 }}>
+                  <Box sx={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center', 
+                    mb: 2 
+                  }}>
+                    <Typography variant="h6" component="h2" sx={{ fontWeight: 'bold' }}>
+                      {post.title}
                     </Typography>
-                    <Box sx={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      gap: 2, 
-                      mb: 2,
-                      flexWrap: 'wrap',
-                    }}>
-                      <Button
-                        startIcon={<ThumbUpIcon />}
-                        onClick={() => handleLikePost(post.id)}
-                        sx={{ minWidth: '100px' }}
+                    <Chip 
+                      label={post.category} 
+                      color="primary" 
+                      size="small" 
+                      sx={{ fontWeight: 'bold' }}
+                    />
+                  </Box>
+                  <Typography variant="body1" paragraph sx={{ whiteSpace: 'pre-line' }}>
+                    {post.content}
+                  </Typography>
+                  <Box sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 2, 
+                    mb: 2,
+                    flexWrap: 'wrap',
+                  }}>
+                    <Button
+                      startIcon={<ThumbUpIcon />}
+                      onClick={() => handleLikePost(post.id)}
+                      sx={{ minWidth: '100px' }}
+                    >
+                      {post.likes} Likes
+                    </Button>
+                    <Button
+                      startIcon={<CommentIcon />}
+                      onClick={() => {
+                        setSelectedPost(post);
+                        setOpenCommentDialog(true);
+                      }}
+                      sx={{ minWidth: '120px' }}
+                    >
+                      {comments[post.id]?.length || 0} Comments
+                    </Button>
+                    <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
+                      <IconButton 
+                        onClick={() => setEditPost(post)}
+                        color="primary"
                       >
-                        {post.likes} Likes
-                      </Button>
-                      <Button
-                        startIcon={<CommentIcon />}
-                        onClick={() => {
-                          setSelectedPost(post);
-                          setOpenCommentDialog(true);
-                        }}
-                        sx={{ minWidth: '120px' }}
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton 
+                        onClick={() => handleDeletePost(post.id)}
+                        color="error"
                       >
-                        {comments[post.id]?.length || 0} Comments
-                      </Button>
-                      <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
-                        <IconButton 
-                          onClick={() => setEditPost(post)}
-                          color="primary"
-                        >
-                          <EditIcon />
-                        </IconButton>
-                        <IconButton 
-                          onClick={() => handleDeletePost(post.id)}
-                          color="error"
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </Box>
+                        <DeleteIcon />
+                      </IconButton>
                     </Box>
-                    <Typography variant="caption" color="text.secondary">
-                      Posted on {new Date(post.createdAt).toLocaleDateString()} at {new Date(post.createdAt).toLocaleTimeString()}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))
-          ) : (
-            <Grid item xs={12}>
-              <Paper sx={{ p: 4, textAlign: 'center' }}>
-                <Typography variant="h6" color="text.secondary">
-                  No posts found in this category. Be the first to create one!
-                </Typography>
-                <Button
-                  variant="contained"
-                  color="primary"
-                  onClick={() => setOpenDialog(true)}
-                  sx={{ mt: 2 }}
-                >
-                  Create Post
-                </Button>
-              </Paper>
+                  </Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Posted on {new Date(post.createdAt).toLocaleDateString()} at {new Date(post.createdAt).toLocaleTimeString()}
+                  </Typography>
+                </CardContent>
+              </Card>
             </Grid>
-          )}
+          ))}
         </Grid>
       </Container>
 
@@ -312,7 +303,7 @@ const Feed = () => {
         maxWidth="md"
       >
         <DialogTitle>
-          {editPost ? 'Edit Post' : 'Create New Post'}
+          {editPost ? 'Edit Post' : 'Create New Feed'}
         </DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
@@ -348,8 +339,8 @@ const Feed = () => {
             >
               <option value="">Select a category</option>
               {categories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
+                <option key={category.name} value={category.name}>
+                  {category.name}
                 </option>
               ))}
             </TextField>
@@ -371,7 +362,7 @@ const Feed = () => {
             color="primary"
             sx={{ ml: 2 }}
           >
-            {editPost ? 'Update Post' : 'Create Post'}
+            {editPost ? 'Update Feed' : 'Create Feed'}
           </Button>
         </DialogActions>
       </Dialog>
