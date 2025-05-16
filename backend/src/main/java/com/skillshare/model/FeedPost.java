@@ -6,26 +6,30 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Document(collection = "posts")
-public class Post {
+@Document(collection = "feed_posts")
+public class FeedPost {
     @Id
     private String id;
-    private String description;
-    private List<String> imageUrls = new ArrayList<>();
-    private String videoUrl;
+    private String title;
+    private String content;
+    private String category;  // IT, Music, Beauty, Programming, etc.
+    private String sourceId;  // ID of the original post from its category
+    private String sourceType; // Type of the source (e.g., "learning_plan", "post")
+    private int likes;
+    private List<FeedComment> comments;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private int likes = 0;
 
     public void onCreate() {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
+        this.likes = 0;
+        this.comments = List.of();
     }
 
     public void onUpdate() {

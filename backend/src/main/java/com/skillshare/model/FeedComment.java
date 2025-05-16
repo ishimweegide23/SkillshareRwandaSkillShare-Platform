@@ -6,22 +6,18 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Document(collection = "posts")
-public class Post {
+@Document(collection = "feed_comments")
+public class FeedComment {
     @Id
     private String id;
-    private String description;
-    private List<String> imageUrls = new ArrayList<>();
-    private String videoUrl;
+    private String postId;
+    private String content;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private int likes = 0;
 
     public void onCreate() {
         this.createdAt = LocalDateTime.now();

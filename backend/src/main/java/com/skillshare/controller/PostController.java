@@ -198,4 +198,28 @@ public class PostController {
             return ResponseEntity.badRequest().body("Failed to delete image: " + e.getMessage());
         }
     }
+
+    // Like a post
+    @PostMapping("/{id}/like")
+    public ResponseEntity<?> likePost(@PathVariable String id) {
+        return postRepository.findById(id)
+            .map(post -> {
+                post.setLikes(post.getLikes() + 1);
+                postRepository.save(post);
+                return ResponseEntity.ok(post);
+            })
+            .orElse(ResponseEntity.notFound().build());
+    }
+
+    // Unlike a post
+    @DeleteMapping("/{id}/like")
+    public ResponseEntity<?> unlikePost(@PathVariable String id) {
+        return postRepository.findById(id)
+            .map(post -> {
+                post.setLikes(Math.max(0, post.getLikes() - 1));
+                postRepository.save(post);
+                return ResponseEntity.ok(post);
+            })
+            .orElse(ResponseEntity.notFound().build());
+    }
 }

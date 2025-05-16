@@ -46,7 +46,7 @@ public class CommentController {
     public ResponseEntity<?> updateComment(@PathVariable String id, @RequestBody Comment updatedComment, @AuthenticationPrincipal User user) {
         return commentRepository.findById(id)
                 .map(comment -> {
-                    if (!comment.getUser().getId().equals(user.getId())) {
+                    if (comment.getUser() != null && user != null && !comment.getUser().getId().equals(user.getId())) {
                         return ResponseEntity.badRequest().body("Not authorized to update this comment");
                     }
                     comment.setContent(updatedComment.getContent());
@@ -60,7 +60,7 @@ public class CommentController {
     public ResponseEntity<?> deleteComment(@PathVariable String id, @AuthenticationPrincipal User user) {
         return commentRepository.findById(id)
                 .map(comment -> {
-                    if (!comment.getUser().getId().equals(user.getId())) {
+                    if (comment.getUser() != null && user != null && !comment.getUser().getId().equals(user.getId())) {
                         return ResponseEntity.badRequest().body("Not authorized to delete this comment");
                     }
                     commentRepository.delete(comment);

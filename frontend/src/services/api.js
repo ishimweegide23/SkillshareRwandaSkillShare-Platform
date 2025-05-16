@@ -97,11 +97,21 @@ export const learningProgressAPI = {
 };
 
 export const feedAPI = {
-  getAllFeeds: () => api.get('/feed'),
-  getFeedById: (id) => api.get(`/feed/${id}`),
-  createFeed: (data) => api.post('/feed', data),
-  updateFeed: (id, data) => api.put(`/feed/${id}`, data),
-  deleteFeed: (id) => api.delete(`/feed/${id}`)
+  getAllPosts: () => axios.get(`${API_URL}/api/feed`),
+  getPostsByCategory: (category) => axios.get(`${API_URL}/api/feed/category/${category}`),
+  getPostsBySourceType: (sourceType) => axios.get(`${API_URL}/api/feed/source/${sourceType}`),
+  getPostsByCategoryAndSourceType: (category, sourceType) => 
+    axios.get(`${API_URL}/api/feed/category/${category}/source/${sourceType}`),
+  createPost: (post) => axios.post(`${API_URL}/api/feed`, post),
+  updatePost: (id, post) => axios.put(`${API_URL}/api/feed/${id}`, post),
+  deletePost: (id) => axios.delete(`${API_URL}/api/feed/${id}`),
+  likePost: (id) => axios.post(`${API_URL}/api/feed/${id}/like`),
+  getComments: (postId) => axios.get(`${API_URL}/api/feed/${postId}/comments`),
+  addComment: (postId, comment) => axios.post(`${API_URL}/api/feed/${postId}/comments`, comment),
+  updateComment: (postId, commentId, comment) => 
+    axios.put(`${API_URL}/api/feed/${postId}/comments/${commentId}`, comment),
+  deleteComment: (postId, commentId) => 
+    axios.delete(`${API_URL}/api/feed/${postId}/comments/${commentId}`),
 };
 
 // Utility error handler

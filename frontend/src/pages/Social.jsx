@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { postAPI, commentAPI, notificationAPI } from '../services/api';
+import { postAPI, commentAPI, notificationAPI, API_URL } from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import { 
@@ -24,7 +24,9 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  CircularProgress,
+  CardMedia
 } from '@mui/material';
 import {
   ThumbUp,
@@ -49,6 +51,9 @@ const Social = () => {
   const [openNotifications, setOpenNotifications] = useState(false);
   const [editingComment, setEditingComment] = useState({ id: null, postId: null, content: '' });
   const [showComments, setShowComments] = useState({});
+  const [likeLoading, setLikeLoading] = useState({});
+  const [commentLoading, setCommentLoading] = useState({});
+  const [likedPosts, setLikedPosts] = useState(new Set());
 
   useEffect(() => {
     fetchData();
@@ -59,7 +64,7 @@ const Social = () => {
     setLoading(true);
     try {
       const res = await postAPI.getFeed();
-      setPosts(res.data.data || []);
+      setPosts(res.data.content || []);
       setLoading(false);
     } catch (err) {
       setError('Failed to load posts');
@@ -69,10 +74,14 @@ const Social = () => {
 
   const fetchComments = async (postId) => {
     try {
+      setCommentLoading(prev => ({ ...prev, [postId]: true }));
       const res = await commentAPI.getComments(postId);
       setComments((prev) => ({ ...prev, [postId]: res.data }));
     } catch (err) {
       console.error('Failed to load comments', err);
+      setError('Failed to load comments. Please try again.');
+    } finally {
+      setCommentLoading(prev => ({ ...prev, [postId]: false }));
     }
   };
 
@@ -87,50 +96,113 @@ const Social = () => {
 
   const handleLike = async (postId) => {
     try {
+      setLikeLoading(prev => ({ ...prev, [postId]: true }));
       await postAPI.likePost(postId);
+      setLikedPosts(prev => new Set(prev).add(postId));
       fetchData();
     } catch (err) {
       console.error('Failed to like post', err);
+      setError('Failed to like post. Please try again.');
+    } finally {
+      setLikeLoading(prev => ({ ...prev, [postId]: false }));
     }
   };
 
   const handleUnlike = async (postId) => {
     try {
+      setLikeLoading(prev => ({ ...prev, [postId]: true }));
       await postAPI.unlikePost(postId);
+      setLikedPosts(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(postId);
+        return newSet;
+      });
       fetchData();
     } catch (err) {
       console.error('Failed to unlike post', err);
+      setError('Failed to unlike post. Please try again.');
+    } finally {
+      setLikeLoading(prev => ({ ...prev, [postId]: false }));
     }
   };
 
   const handleAddComment = async (postId) => {
     if (!commentInputs[postId]?.trim()) return;
+    
+    const tempComment = {
+      id: 'temp-' + Date.now(),
+      content: commentInputs[postId],
+      user: { name: 'You' }, // This will be replaced with actual user data from the server
+      createdAt: new Date().toISOString()
+    };
+
+    // Optimistically update UI
+    setComments(prev => ({
+      ...prev,
+      [postId]: [...(prev[postId] || []), tempComment]
+    }));
+    setCommentInputs(prev => ({ ...prev, [postId]: '' }));
+
     try {
-      await commentAPI.addComment(postId, commentInputs[postId]);
-      setCommentInputs((prev) => ({ ...prev, [postId]: '' }));
-      fetchComments(postId);
+      const response = await commentAPI.addComment(postId, commentInputs[postId]);
+      // Replace temporary comment with actual one
+      setComments(prev => ({
+        ...prev,
+        [postId]: prev[postId].map(comment => 
+          comment.id === tempComment.id ? response.data : comment
+        )
+      }));
     } catch (err) {
       console.error('Failed to add comment', err);
+      setError('Failed to add comment. Please try again.');
+      // Remove temporary comment on error
+      setComments(prev => ({
+        ...prev,
+        [postId]: prev[postId].filter(comment => comment.id !== tempComment.id)
+      }));
     }
   };
 
   const handleUpdateComment = async () => {
     if (!editingComment.content?.trim()) return;
+    
+    const { id, postId, content } = editingComment;
+    
+    // Optimistically update UI
+    setComments(prev => ({
+      ...prev,
+      [postId]: prev[postId].map(comment => 
+        comment.id === id ? { ...comment, content } : comment
+      )
+    }));
+    setEditingComment({ id: null, postId: null, content: '' });
+
     try {
-      await commentAPI.updateComment(editingComment.id, editingComment.content);
-      fetchComments(editingComment.postId);
-      setEditingComment({ id: null, postId: null, content: '' });
+      await commentAPI.updateComment(id, content);
+      // No need to update UI again as we already did it optimistically
     } catch (err) {
       console.error('Failed to update comment', err);
+      setError('Failed to update comment. Please try again.');
+      // Revert optimistic update on error
+      fetchComments(postId);
     }
   };
 
   const handleDeleteComment = async (commentId, postId) => {
+    // Optimistically update UI
+    setComments(prev => ({
+      ...prev,
+      [postId]: prev[postId].filter(comment => comment.id !== commentId)
+    }));
+
     try {
       await commentAPI.deleteComment(commentId);
-      fetchComments(postId);
+      // No need to update UI again as we already did it optimistically
     } catch (err) {
       console.error('Failed to delete comment', err);
+      setError('Failed to delete comment. Please try again.');
+      // Revert optimistic update on error
+      fetchComments(postId);
     }
   };
 
@@ -271,6 +343,30 @@ const Social = () => {
                   {post.description}
                 </Typography>
                 
+                {post.imageUrls?.length > 0 && (
+                  <Box sx={{ 
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+                    gap: 2,
+                    mt: 2
+                  }}>
+                    {post.imageUrls.map((url, i) => (
+                      <CardMedia
+                        key={i}
+                        component="img"
+                        image={url.startsWith('http') ? url : `${API_URL}${url}`}
+                        alt={`Post image ${i}`}
+                        sx={{ 
+                          borderRadius: 2,
+                          maxHeight: 300,
+                          objectFit: 'cover'
+                        }}
+                        onError={e => { e.target.src = '/fallback.png'; }}
+                      />
+                    ))}
+                  </Box>
+                )}
+                
                 <Typography variant="caption" color="textSecondary">
                   Posted on {new Date(post.createdAt).toLocaleString()}
                 </Typography>
@@ -279,13 +375,20 @@ const Social = () => {
               <CardActions sx={{ px: 2, pt: 0 }}>
                 <Box display="flex" alignItems="center" flexGrow={1}>
                   <IconButton 
-                    onClick={() => post.isLiked ? handleUnlike(post.id) : handleLike(post.id)}
-                    color={post.isLiked ? 'primary' : 'default'}
+                    onClick={() => likedPosts.has(post.id) ? handleUnlike(post.id) : handleLike(post.id)}
+                    color={likedPosts.has(post.id) ? 'primary' : 'default'}
+                    disabled={likeLoading[post.id]}
                   >
-                    {post.isLiked ? <ThumbUp /> : <ThumbUpOutlined />}
+                    {likeLoading[post.id] ? (
+                      <CircularProgress size={24} />
+                    ) : likedPosts.has(post.id) ? (
+                      <ThumbUp />
+                    ) : (
+                      <ThumbUpOutlined />
+                    )}
                   </IconButton>
                   <Typography variant="body2" sx={{ mr: 2 }}>
-                    {post.likedBy?.length || 0}
+                    {post.likes || 0}
                   </Typography>
                   
                   <IconButton onClick={() => toggleComments(post.id)}>
@@ -301,7 +404,11 @@ const Social = () => {
                 <Box sx={{ px: 2, pb: 2 }}>
                   <Divider sx={{ mb: 2 }} />
                   
-                  {comments[post.id]?.length > 0 ? (
+                  {commentLoading[post.id] ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+                      <CircularProgress size={24} />
+                    </Box>
+                  ) : comments[post.id]?.length > 0 ? (
                     <List sx={{ mb: 2 }}>
                       {comments[post.id].map((comment) => (
                         <ListItem 
