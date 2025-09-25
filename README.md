@@ -1,6 +1,6 @@
 # Skill-Sharing Platform
 
-A full-stack application for sharing and learning skills, built with Spring Boot and React. jwjwjw
+A full-stack application for sharing and learning skills, built with Spring Boot and React. jwjw
 
 ## Project Structure
 
