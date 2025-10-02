@@ -2,7 +2,7 @@
 
 A full-stack application for sharing and learning skills, built with Spring Boot and React. 
 
-## Project Structure    
+## Project Structure    hguyfiyiugog
 
 ```
 skill-sharing-platform/
